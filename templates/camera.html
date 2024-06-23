@@ -1,0 +1,519 @@
+{% extends "base.html" %}
+{% block title %}
+    KIPI-Camera
+{% endblock %}
+{% block head %}
+{% endblock %}
+{% block content %}
+
+<div class="container p-3">
+    <div class="mb-3">
+        <div id="captureAlert" class="alert" role="alert" style="display: none;"></div>
+        <div id="analyzeAlert" class="alert" role="alert" style="display: none;"></div>
+        <div id="responseAlert" class="alert" role="alert" style="display: none;"></div>
+        <div id="responseMessageAlert" class="alert" role="alert" style="display: none;"></div>
+        <div id="showPhotoImage" style="display: none;"></div>
+    </div>
+    <div id="cameraImageFrame" class="mb-3" style="display: block;">
+        <h4 class="pt-4 pb-2 mb-4 border-bottom">Camera Feed</h4>
+        <img class="img-fluid" id="cameraImage" alt="Camera Feed">
+    </div>
+    <div class="mb-3">
+            <button type="button" class="btn btn-primary btn-success btn-lg" id="captureButton" onclick="capturePhoto()">1. Capture Photo</button>
+            <button type="button" class="btn btn-primary btn-success btn-lg" id="sendToOpenAIButton" onclick="sendToOpenAI()">2. Analyze Photo</button>
+    </div>
+    <br> 
+    <div class="mb-3" id="responseFrame" style="display: none;>
+        <h6>Response</h6>
+        <div class="container border overflow-auto h-50" id="response"></div>
+    </div> 
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    console.log('DOM content loaded');
+
+    // Parse the JSON string into a JavaScript object
+    var liveSettings = {{ live_settings | tojson }};
+    var rotationSettings = {{ rotation_settings | tojson }};
+    var settings_from_camera = {{ settings_from_camera | tojson }};
+    var capture_settings = {{ capture_settings | tojson }};
+    console.log(liveSettings);
+    console.log(capture_settings);
+    // Call the updateUI
+
+    setrange(settings_from_camera);
+    updateUI(liveSettings);
+    updateUI(rotationSettings);
+    updateUI(capture_settings);
+    });
+
+document.addEventListener('DOMContentLoaded', function () {
+        // Get the image element
+        const cameraImage = document.getElementById('cameraImage');
+
+        // Set the source attribute to start loading the image
+        cameraImage.src = "{{ url_for('video_feed') }}";
+    });
+
+document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') {
+            // Page is visible, reload the camera feed
+            refreshCameraFeed();
+        }
+    });
+
+    const checkboxSettings = ['AfMode', 'AfRange', 'AfSpeed', 'AeConstraintMode', 'AeExposureMode', 'AeFlickerMode', 'AeMeteringMode', 'AwbMode', 'Resolution'];
+    const switchSettings = ['AwbEnable', 'AeEnable', 'AwbMode', 'hflip', 'vflip', 'makeRaw'];
+    const sliderSettings = ['LensPosition', 'ExposureValue', 'Brightness', 'Contrast', 'Saturation', 'Sharpness'];
+    const inputSettings = ['ExposureTime', 'AeFlickerPeriod']
+
+function setrange(settings_from_camera) {
+    for (const key in settings_from_camera) {
+        const setting = settings_from_camera[key];
+        //console.log(`${key} setting: ${setting}`);
+        const min = setting[0];
+        const max = setting[1];
+        const defaultValue = setting[2]; 
+        if (sliderSettings.includes(key)) {
+                const elementId = document.getElementById(key);
+                if (elementId) {
+                    elementId.min = min;
+                    elementId.max = max;
+                    elementId.value = defaultValue;
+                    const rangeElementId = document.getElementById(`current${key}`);
+                    if (key === 'LensPosition') {
+                        rangeElementId.innerHTML = `Lens Position: ${defaultValue}`;
+                    } else if (key === 'ExposureValue') {
+                        rangeElementId.innerHTML = `Exposure Compensation: ${defaultValue}`;
+                    } else {
+                        rangeElementId.innerHTML = `${key}: ${defaultValue}`;
+                    }  
+                }
+            } else if (inputSettings.includes(key)) {
+                const elementId = document.getElementById(key);
+                if (elementId) {
+                    elementId.min = min;
+                    elementId.max = max;
+                    elementId.value = defaultValue;
+                    const rangeElementId = document.getElementById(`${key}Range`);
+                    rangeElementId.innerHTML = `Please enter a value between ${min} and ${max}`;
+                }
+            } else if (key === 'ScalerCrop') {
+                //Scaler crop needs a little more config
+                // Deal with width
+                const width = document.getElementById(`${key}Width`);
+                if (width) {
+                    width.min = min[2];
+                    width.max = max[2];
+                    width.value = defaultValue[2];
+                }
+                // Deal with height
+                const height = document.getElementById(`${key}Height`);
+                if (height) {
+                    height.min = min[3];
+                    height.max = max[3];
+                    height.value = defaultValue[3];
+                }
+                // Deal with x-offset
+                const xOffset = document.getElementById(`${key}XOffset`);
+                if (xOffset) {
+                    xOffset.min = min[0];
+                    xOffset.max = max[0];
+                    xOffset.value = defaultValue[0];
+                }
+                // Deal with y-offset
+                const yOffset = document.getElementById(`${key}YOffset`);
+                if (yOffset) {
+                    yOffset.min = min[1];
+                    yOffset.max = max[1];
+                    yOffset.value = defaultValue[1];
+                }
+
+                
+            } else {
+                console.log(`Skipping setting: ${key}`);
+            }
+    }
+}
+
+function updateUI(settings) {
+    for (const key in settings) {
+        if (checkboxSettings.includes(key)) {
+                console.log(settings[key]);
+                console.log(settings);
+                // Update checkboxes
+                const checkboxes = document.getElementsByName(key);
+                console.log(checkboxes);
+                checkboxes.forEach(checkbox => {
+                    const checkboxValue = parseInt(checkbox.id.replace(key, ''));
+                    checkbox.checked = settings[key] === checkboxValue;
+                });
+            } else if (switchSettings.includes(key)) {
+                // Update the switch state
+                const switchbox = document.getElementById(key);
+                if (switchbox) {
+                    switchbox.checked = settings[key];
+                }
+            } else if (sliderSettings.includes(key)) {
+                document.getElementById(key).value = settings[key];
+                const slider = document.getElementById(`current${key}`);
+                if (key === 'LensPosition') {
+                    slider.innerText = `Lens Position: ${settings[key]}`;
+                } else if (key === 'ExposureValue') {
+                    slider.innerText = `Exposure Compensation: ${settings[key]}`;
+                } else {
+                    slider.innerText = `${key}: ${settings[key]}`; 
+                }
+            } else if (inputSettings.includes(key)) {
+                const input = document.getElementById(key);
+                if (input) {
+                    input.value = settings[key];
+                }
+            } else if (key === 'ScalerCrop') {
+                console.log(settings[key]);
+                const cropFrame = document.getElementById('cropFrame');
+                const x_offset = document.getElementById('ScalerCropXOffset');
+                const y_offset = document.getElementById('ScalerCropYOffset');
+                const width = document.getElementById('ScalerCropWidth');
+                const height = document.getElementById('ScalerCropHeight');
+                const maxFrameWidth = parseInt(document.getElementById('ScalerCropWidth').max);
+                const maxFrameHeight = parseInt(document.getElementById('ScalerCropHeight').max);
+                if (x_offset) {
+                    x_offset.value = settings[key][0]
+                    cropFrame.style.left = (settings[key][0] * 240 / maxFrameWidth) + 'px';
+                } 
+                if (y_offset) {
+                    y_offset.value = settings[key][1]
+                    cropFrame.style.top = (settings[key][1] * 133 / maxFrameHeight) + 'px';
+                }
+                if (width) {
+                    width.value = settings[key][2]
+                    cropFrame.style.width = (settings[key][2] * 240 / maxFrameWidth) + 'px';
+                } 
+                if (height) {
+                    height.value = settings[key][3]
+                    cropFrame.style.height = (settings[key][3] * 133 / maxFrameHeight) + 'px';
+                }                
+            } else {
+                console.log(`Skipping unknown setting: ${key}`);
+            }
+    }
+}
+
+////////////////////////////////////
+// Live Settings 
+
+// Function to update server settings and UI
+function updateLiveSettings(data) {
+    console.log(data);
+    return fetch('/update_live_settings', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Settings updated:', data);
+        // Return the data to the next chain
+        return data;
+    })
+    .catch(error => {
+        console.error('Error updating settings:', error);
+        throw error;  // Re-throw the error for the next catch
+    });
+}
+
+function adjustSwitchSetting(settingId) {
+    // Get the current state of the switch
+    const inputElement = document.getElementById(settingId);
+    const selection = inputElement.checked;
+    // Update server settings
+    updateLiveSettings({ [settingId]: selection });
+    // Notify console
+    console.log(settingId, 'changed:', selection);
+}
+
+function adjustCheckboxSetting(settingId, selection) {
+    // Convert settingValue to an integer
+    const settingValue = parseInt(selection);
+
+    // Update UI with the new value
+    updateUI({ [settingId]: settingValue });
+
+    // Update server settings and return the promise
+    return updateLiveSettings({ [settingId]: settingValue })
+        .then(() => {
+            // Notify console
+            console.log(settingId, 'changed:', settingValue);
+        });
+}
+
+function adjustSliderSetting(settingId, selection) {
+    // Convert settingValue to an float
+    const settingValue = parseFloat(selection);
+    // Update UI with the new value
+    updateUI({ [settingId]: settingValue });
+    // Update server settings
+    updateLiveSettings({ [settingId]: settingValue });
+    // Notify console
+    console.log(settingId, 'changed:', settingValue);
+}
+
+function adjustNumericSetting(settingId) {
+    // Handle the input change here
+    const inputElement = document.getElementById(settingId);
+    const setValue = parseFloat(inputElement.value); // Convert to a number
+    // Get the min and max values from the input element
+    const minValue = parseFloat(inputElement.min);
+    const maxValue = parseFloat(inputElement.max);
+    // Check if the entered value is within the valid range
+    if (setValue < minValue || setValue > maxValue || isNaN(setValue)) {
+        // Add 'invalid' class to the input element
+        inputElement.classList.add('is-invalid');
+    } else {
+        // Remove 'invalid' class and error message div if they exist
+        inputElement.classList.remove('is-invalid');
+        // Update UI and server settings
+        updateUI({ [settingId]: setValue });
+        updateLiveSettings({ [settingId]: setValue });
+    }
+}
+
+function adjustScalerCrop() {
+            const x_offset = parseInt(document.getElementById('ScalerCropXOffset').value);
+            const y_offset = parseInt(document.getElementById('ScalerCropYOffset').value);
+            let width = parseInt(document.getElementById('ScalerCropWidth').value);
+            let height = parseInt(document.getElementById('ScalerCropHeight').value);
+            
+            const maxFrameWidth = parseInt(document.getElementById('ScalerCropWidth').max); // Maximum width of the cameraFrame
+            const maxFrameHeight = parseInt(document.getElementById('ScalerCropHeight').max); // Maximum height of the cameraFrame
+            const minFrameWidth = parseInt(document.getElementById('ScalerCropWidth').min); // Minimum width of the cameraFrame
+            const minFrameHeight = parseInt(document.getElementById('ScalerCropHeight').min); // Minimum height of the cameraFrame
+    
+            // Adjust width if needed
+            if (width < minFrameWidth) {
+                width = minFrameWidth;
+                document.getElementById('ScalerCropWidth').value = width;
+            }
+            if (x_offset + width > maxFrameWidth) {
+                width = maxFrameWidth - x_offset;
+                document.getElementById('ScalerCropWidth').value = width;
+            }
+    
+            // Adjust height if needed
+            if (height < minFrameHeight) {
+                height = minFrameHeight;
+                document.getElementById('ScalerCropHeight').value = height;
+            }
+            if (y_offset + height > maxFrameHeight) {
+                height = maxFrameHeight - y_offset;
+                document.getElementById('ScalerCropHeight').value = height;
+            }
+    
+            const cropFrame = document.getElementById('cropFrame');
+            cropFrame.style.left = (x_offset * 240 / maxFrameWidth) + 'px';
+            cropFrame.style.top = (y_offset * 133 / maxFrameHeight) + 'px';
+            cropFrame.style.width = (width * 240 / maxFrameWidth) + 'px';
+            cropFrame.style.height = (height * 133 / maxFrameHeight) + 'px';
+            console.log(`ScalerCrop: [${x_offset}, ${y_offset}, ${width}, ${height}]`);
+            updateLiveSettings({'ScalerCrop':[x_offset, y_offset, width, height]})
+}
+
+// Function to update server settings and UI
+function resetsettings() {
+        fetch('/reset_default_live_settings')
+            .then(response => response.json())
+            .then(data => {
+        console.log('Settings received:', data);
+
+        // Access live_settings and restart_settings
+        const live_settings = data.data1;
+        const restart_settings = data.data2;
+
+        console.log('Data 1:', live_settings);
+        console.log('Data 2:', restart_settings);
+        // Update UI with live_settings
+        updateUI(live_settings);
+        updateUI(restart_settings);
+        refreshCameraFeed();
+    })
+    .catch(error => {
+        console.error('Error updating settings:', error);
+        throw error;  // Re-throw the error for the next catch
+    });
+}
+
+function saveSettings() {
+    fetch('/save_settings', {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Settings saved:', data);
+        // You can display a message or update the UI as needed
+    })
+    .catch(error => {
+        console.error('Error saving settings:', error);
+        // Handle the error
+    });
+}
+
+////////////////////////////////////
+// Take a Picture functions & and show picture / 1. Capture Photo Button
+
+let captureButton = document.getElementById('captureButton');
+let isButtonEnabled = true;
+
+function enableCaptureButton() {
+    isButtonEnabled = true;
+    captureButton.disabled = false;
+}
+
+function capturePhoto() {
+    if (!isButtonEnabled) {
+        return;
+    }
+
+    // Disable the button to prevent rapid presses
+    captureButton.disabled = true;
+    isButtonEnabled = false;
+    // Show alert based on the condition
+    const alertElement = document.getElementById('captureAlert');
+    const showPhotoImageElement = document.getElementById('showPhotoImage');
+    const cameraImageFrameElement = document.getElementById('cameraImageFrame');
+    
+    // Call your capture_photo function here
+    fetch('/capture_photo', {
+        method: 'POST',
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Handle the success response here
+        console.log(data);
+
+        // Re-enable the button after a successful response
+        enableCaptureButton();
+        // Success alert
+        alertElement.className = 'alert alert-success';
+        alertElement.textContent = 'Photo saved successfully.';
+        $('#showPhotoImage').append('<img class="img-fluid" src="' + data.captured_photo + '" alt="Captured Photo">');
+        cameraImageFrameElement.style.display = 'none';
+    })
+    .catch(error => {
+        // Handle the error response here
+        console.error('Error capturing photo:', error);
+        // Error alert
+        alertElement.className = 'alert alert-danger';
+        alertElement.textContent = 'Error capturing photo.';
+        // Re-enable the button in case of an error
+        enableCaptureButton();
+    });
+    alertElement.style.display = 'block';
+    showPhotoImageElement.style.display = 'block';
+
+    // Optional: Hide the alert after a few seconds
+    setTimeout(() => {
+        alertElement.style.display = 'none';
+    }, 5000); // Adjust the time as needed
+
+}
+
+//////////////////////////////////////////////////
+// Send image to OpenAI / 2. Analyze Photo Button
+
+let sendToOpenAIButton = document.getElementById('sendToOpenAIButton');
+let isSendToOpenAIButtonEnabled = true;
+
+function enableSendToOpenAIButton() {
+    isSendToOpenAIButtonEnabled = true;
+    sendToOpenAIButton.disabled = false;
+}
+
+function sendToOpenAI() {
+    if (!isSendToOpenAIButtonEnabled) {
+        return;
+    }
+
+    // Disable the button to prevent rapid presses
+    sendToOpenAIButton.disabled = true;
+    isSendToOpenAIButtonEnabled = false;
+    // Show alert based on the condition
+    const analyzeAlertElement = document.getElementById('analyzeAlert');
+    const responseAlertElement = document.getElementById('responseMessageAlert');
+    const responseFrameElement = document.getElementById('responseFrame');
+
+    analyzeAlertElement.className = 'alert alert-success';
+    analyzeAlertElement.textContent = 'Analyzing photo.';
+    analyzeAlertElement.style.display = 'block';
+
+    // Call your send_image_to_openai function here
+    fetch('/send_image_to_openai', {
+        method: 'POST',
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Handle the success response here
+        console.log(data);
+
+        // Re-enable the button after a successful response
+        enableSendToOpenAIButton();
+        // Display response message from OpenAI
+        console.log("data.message: " + data.message);
+        console.log("data.photo_description: " + data.photo_description);
+                
+        $('#response').append('<p id="ai_message"> <i class="bi bi-robot"></i>: ' + data.photo_description + '</p>'); 
+        $('#response #ai_message').css({"color": "lightsalmon", "width": "90%", "float": "right"});
+        responseAlertElement.className = 'alert alert-success';
+        responseAlertElement.textContent = data.photo_description;
+    })
+    .catch(error => {
+        // Handle the error response here
+        console.error('Error sending image to OpenAI:', error);
+        // Error alert
+        analyzeAlertElement.className = 'alert alert-danger';
+        analyzeAlertElement.textContent = 'Error sending image to OpenAI.';
+        // Re-enable the button in case of an error
+        enableSendToOpenAIButton();
+    });
+    responseAlertElement.style.display = 'block';
+    responseFrameElement.style.display = 'block';
+
+    // Optional: Hide the alert after a few seconds
+    setTimeout(() => {
+        analyzeAlertElement.style.display = 'none';
+    }, 8000); // Adjust the time as needed
+
+}
+
+////////////////////////////////////
+// Feed Restarting Settings 
+
+// Function to refresh the camera feed
+function refreshCameraFeed() {
+  const imageElement = document.getElementById('cameraImage');
+  if (imageElement) {
+    // Get the full resolution of the image
+    const fullResolutionWidth = imageElement.naturalWidth;
+    const fullResolutionHeight = imageElement.naturalHeight;
+
+    // Calculate the aspect ratio
+    const aspectRatio = fullResolutionWidth / fullResolutionHeight;
+
+    // Set the width to 100% and calculate the height based on the aspect ratio
+    imageElement.style.width = '100%';
+    imageElement.style.height = `${imageElement.offsetWidth / aspectRatio}px`;
+    cameraImage.src = `${cameraImage.src.split('?')[0]}?${new Date().getTime()}`;
+
+  }
+}
+
+
+</script>
+
+{% endblock %}

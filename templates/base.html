@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-icons.css') }}">
+    <script async type="text/javascript" src="{{ url_for('static', filename='js/jquery-3.7.1.min.js') }}"></script>
+    {% block head %}
+    {% endblock %}
+  </head>
+<body>
+  <nav class="navbar navbar-expand-sm bg-dark border-bottom border-body" data-bs-theme="dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#"><i class="bi bi-robot"></i> KIPI-Camera</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="nav nav-pills">
+          <li class="nav-item">
+            <a {% if page == 'home' %} class="nav-link active" {% else %} class="nav-link"{% endif %} href="{{ url_for('home') }}">Home</span></a>
+          </li>
+          <li class="nav-item">
+            <a {% if page == 'camera' %} class="nav-link active" {% else %} class="nav-link"{% endif %} href="{{ url_for('camera') }}">Camera</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('video_feed') }}">Video Feed</a>
+          </li>
+          <li class="nav-item">
+            <a {% if page == 'about' %} class="nav-link active" {% else %} class="nav-link"{% endif %} href="{{ url_for('about') }}">About</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+  <main>
+        {% block content %}
+        {% endblock %}
+    </main>
+  <script async type="text/javascript" src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+</body>
+</html>
