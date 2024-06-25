@@ -1,6 +1,8 @@
 # kipi-camera
 Analyze photos and get a detailed photo description with the help of 'OpenAI Vision' and a Raspberry Pi 4 with a camera module v1.3.
 
+<img src="docs/images/kipi-camera-clock-screenshot.png" width="45%"/> <img src="docs/images/kipi-camera-video-english-1.gif" width="41%"/> 
+
 ## Prerequisite
 You'll need:
 - Raspberry Pi 4 with Raspberry Pi OS (bookworm)
@@ -104,6 +106,12 @@ if __name__ == "__main__":
     # Start the Flask development server and run the application.
     app.run(debug=False, host='0.0.0.0', port=8001)
 ```
+
+## Gallery
+<img src="docs/images/kipi-camera-photo-1.jpg" />
+<img src="docs/images/kipi-camera-photo-2.jpg" />
+<img src="docs/images/kipi-camera-photo-3.jpg" />
+<img src="docs/images/kipi-camera-photo-4.jpg" />
 
 ## License
 All my publications in this project are free to use and are subject to the MIT license.
