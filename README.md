@@ -21,7 +21,7 @@ sudo apt update && sudo apt upgrade -y
 
 Clone the repository to your Raspberry Pi:
 ```shell
-git clone https://github.com/hascheel/kipi-camera.git
+git clone https://github.com/hardyscheel/kipi-camera.git
 ```
 
 Create a Python virtual environment:
